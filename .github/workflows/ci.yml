@@ -54,6 +54,12 @@ jobs:
             -t $IMAGE_NAME:main-${{ github.run_number }} \
             .
 
+      - name: Set up Trivy scanner
+        uses: aquasecurity/setup-trivy@v0.2.0
+        with:
+          cache: true
+          version: v0.70.0
+
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.33.1
         with:
@@ -62,6 +68,7 @@ jobs:
           exit-code: 1
           ignore-unfixed: true
           format: table
+          skip-setup-trivy: true
 
       - name: Push Docker image to registry
         if: github.event_name == 'push'
