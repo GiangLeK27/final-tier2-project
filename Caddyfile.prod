@@ -1,0 +1,7 @@
+# Replace your-domain.com with your real domain.
+# Caddy will automatically request and renew HTTPS certificates.
+
+your-domain.com {
+    encode gzip
+    reverse_proxy app:3000
+}

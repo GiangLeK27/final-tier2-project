@@ -1,0 +1,66 @@
+services:
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - frontend
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      APP_VERSION: ${APP_VERSION:-local-dev}
+      DATABASE_URL: postgres://${POSTGRES_USER:-finaluser}:${POSTGRES_PASSWORD:-change_this_database_password}@db:5432/${POSTGRES_DB:-finaldb}
+    expose:
+      - "3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-finaldb}
+      POSTGRES_USER: ${POSTGRES_USER:-finaluser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_database_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finaluser} -d ${POSTGRES_DB:-finaldb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  frontend:
+  backend:
