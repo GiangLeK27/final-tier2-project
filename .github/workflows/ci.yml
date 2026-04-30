@@ -1,4 +1,4 @@
-name: CI - Lint Build Scan Push Image
+name: CI/CD - Lint Build Scan Push Deploy
 
 on:
   push:
@@ -14,7 +14,7 @@ env:
 
 jobs:
   ci:
-    name: Lint, Build, Scan, and Push Docker Image
+    name: CI - Lint, Build, Scan, and Push Docker Image
     runs-on: ubuntu-latest
 
     steps:
@@ -75,3 +75,57 @@ jobs:
         run: |
           docker push $IMAGE_NAME:$IMAGE_TAG
           docker push $IMAGE_NAME:main-${{ github.run_number }}
+
+  cd:
+    name: CD - Deploy to Production EC2
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy production over SSH
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+
+            echo "Starting production deployment..."
+            cd /opt/final-tier2
+
+            echo "Logging in to Docker Hub..."
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            echo "Updating APP_IMAGE in .env..."
+            if grep -q "^APP_IMAGE=" .env; then
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" .env
+            else
+              echo "APP_IMAGE=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" >> .env
+            fi
+
+            if grep -q "^APP_VERSION=" .env; then
+              sed -i "s|^APP_VERSION=.*|APP_VERSION=${{ github.sha }}|" .env
+            else
+              echo "APP_VERSION=${{ github.sha }}" >> .env
+            fi
+
+            echo "Pulling new application image..."
+            docker compose -f docker-compose.prod.yml pull app
+
+            echo "Deploying production containers..."
+            docker compose -f docker-compose.prod.yml up -d --scale app=2 --remove-orphans
+
+            echo "Cleaning unused Docker images..."
+            docker image prune -f
+
+            echo "Current production status:"
+            docker compose -f docker-compose.prod.yml ps
+
+            echo "Testing production health endpoint..."
+            sleep 10
+            curl -f https://devops20.online/health
+
+            echo "Deployment completed successfully."
