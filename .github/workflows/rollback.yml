@@ -1,0 +1,116 @@
+name: Rollback Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to rollback to, e.g. sha-25a922e296fc5e4ddea4b089c6bc30ade1b3ff38"
+        required: true
+        type: string
+
+env:
+  IMAGE_NAME: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/final-tier2-app
+
+jobs:
+  rollback:
+    name: Rollback production over SSH
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Rollback production to selected image
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+
+            cd /opt/final-tier2
+
+            TARGET_IMAGE="${{ env.IMAGE_NAME }}:${{ github.event.inputs.image_tag }}"
+            CURRENT_IMAGE="$(grep '^APP_IMAGE=' .env | cut -d '=' -f2-)"
+
+            echo "========================================"
+            echo "Manual rollback metadata"
+            echo "========================================"
+            echo "Current production image: $CURRENT_IMAGE"
+            echo "Target rollback image: $TARGET_IMAGE"
+            echo "Triggered by GitHub Actions workflow_dispatch"
+
+            echo "========================================"
+            echo "Logging in to Docker Hub"
+            echo "========================================"
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            echo "========================================"
+            echo "Docker Compose status BEFORE rollback"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml ps
+
+            echo "========================================"
+            echo "Updating APP_IMAGE for rollback"
+            echo "========================================"
+            sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$TARGET_IMAGE|" .env
+
+            if grep -q "^APP_VERSION=" .env; then
+              sed -i "s|^APP_VERSION=.*|APP_VERSION=${{ github.event.inputs.image_tag }}|" .env
+            else
+              echo "APP_VERSION=${{ github.event.inputs.image_tag }}" >> .env
+            fi
+
+            echo "Current .env image after update:"
+            grep "^APP_IMAGE=" .env
+            grep "^APP_VERSION=" .env || true
+
+            echo "========================================"
+            echo "Pulling rollback image"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml pull app
+
+            echo "========================================"
+            echo "Recreating application containers"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml up -d --scale app=2 --remove-orphans
+
+            echo "Waiting for services to stabilize..."
+            sleep 15
+
+            echo "========================================"
+            echo "Docker Compose status AFTER rollback"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml ps
+
+            echo "========================================"
+            echo "Running rollback health gate"
+            echo "========================================"
+
+            echo "Checking /health endpoint..."
+            HEALTH_RESPONSE=$(curl -fsS https://devops20.online/health)
+            echo "$HEALTH_RESPONSE"
+
+            echo "$HEALTH_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"|"ok"[[:space:]]*:[[:space:]]*true' || {
+              echo "Rollback health check failed: /health did not return a valid OK response."
+              exit 1
+            }
+
+            echo "Checking /db endpoint..."
+            DB_RESPONSE=$(curl -fsS https://devops20.online/db)
+            echo "$DB_RESPONSE"
+
+            echo "$DB_RESPONSE" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || {
+              echo "Rollback database check failed: /db did not return ok=true."
+              exit 1
+            }
+
+            echo "========================================"
+            echo "Recent application logs after rollback"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml logs app --tail=40
+
+            echo "========================================"
+            echo "Rollback completed successfully"
+            echo "========================================"
+            echo "Rolled back from: $CURRENT_IMAGE"
+            echo "Rolled back to:   $TARGET_IMAGE"
