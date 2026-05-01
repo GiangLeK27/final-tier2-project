@@ -112,17 +112,49 @@ jobs:
               echo "APP_VERSION=${{ github.sha }}" >> .env
             fi
 
-            echo "Pulling new application image..."
+            echo "========================================"
+            echo "Deployment metadata"
+            echo "========================================"
+            echo "GitHub commit SHA: ${{ github.sha }}"
+            echo "Docker image to deploy: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+            echo "Production directory: $(pwd)"
+            echo "Current APP_IMAGE before deployment:"
+            grep "^APP_IMAGE=" .env || true
+
+            echo "========================================"
+            echo "Docker Compose status BEFORE deployment"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml ps || true
+
+            echo "========================================"
+            echo "Pulling new application image"
+            echo "========================================"
             docker compose -f docker-compose.prod.yml pull app
 
-            echo "Deploying production containers..."
+            echo "========================================"
+            echo "Deploying production containers"
+            echo "========================================"
             docker compose -f docker-compose.prod.yml up -d --scale app=2 --remove-orphans
 
-            echo "Cleaning unused Docker images..."
+            echo "========================================"
+            echo "Cleaning unused Docker images"
+            echo "========================================"
             docker image prune -f
 
-            echo "Current production status:"
+            echo "========================================"
+            echo "Current APP_IMAGE after deployment"
+            echo "========================================"
+            grep "^APP_IMAGE=" .env
+
+            echo "========================================"
+            echo "Docker Compose status AFTER deployment"
+            echo "========================================"
             docker compose -f docker-compose.prod.yml ps
+
+            echo "========================================"
+            echo "Recent application logs"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml logs app --tail=40
 
             echo "Waiting for production services to stabilize..."
             sleep 15
