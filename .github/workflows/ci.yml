@@ -124,8 +124,32 @@ jobs:
             echo "Current production status:"
             docker compose -f docker-compose.prod.yml ps
 
-            echo "Testing production health endpoint..."
-            sleep 10
-            curl -f https://devops20.online/health
+            echo "Waiting for production services to stabilize..."
+            sleep 15
+
+            echo "Running post-deployment health gate..."
+
+            echo "Checking /health endpoint..."
+            HEALTH_RESPONSE=$(curl -fsS https://devops20.online/health)
+            echo "$HEALTH_RESPONSE"
+
+            echo "$HEALTH_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"|"ok"[[:space:]]*:[[:space:]]*true' || {
+              echo "Health check failed: /health did not return a valid OK response."
+              exit 1
+            }
+
+            echo "Checking /db endpoint..."
+            DB_RESPONSE=$(curl -fsS https://devops20.online/db)
+            echo "$DB_RESPONSE"
+
+            echo "$DB_RESPONSE" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || {
+              echo "Database check failed: /db did not return ok=true."
+              exit 1
+            }
+
+            echo "Post-deployment health gate passed."
+
+            echo "Current production status after health gate:"
+            docker compose -f docker-compose.prod.yml ps
 
             echo "Deployment completed successfully."
