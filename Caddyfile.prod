@@ -1,7 +1,13 @@
-# Replace your-domain.com with your real domain.
-# Caddy will automatically request and renew HTTPS certificates.
-
-your-domain.com {
+devops20.online {
     encode gzip
     reverse_proxy app:3000
+}
+
+www.devops20.online {
+    redir https://devops20.online{uri}
+}
+
+grafana.devops20.online {
+    encode gzip
+    reverse_proxy grafana:3000
 }
