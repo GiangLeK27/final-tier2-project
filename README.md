@@ -1,6 +1,6 @@
 # Final Tier 2 Production CI/CD Runbook
 
-## 1. Project Overview
+## 1. Project Overview:
 
 This project implements a production-grade CI/CD system for the Startup X final project.
 
@@ -10,7 +10,7 @@ Selected architecture:
 
 The production system runs on an AWS EC2 Ubuntu server and is exposed through a public HTTPS domain.
 
-## 2. Production URLs
+## 2. Production URLs:
 
 - Application: https://devops20.online
 - Health endpoint: https://devops20.online/health
@@ -18,7 +18,7 @@ The production system runs on an AWS EC2 Ubuntu server and is exposed through a 
 - Metrics endpoint: https://devops20.online/metrics
 - Grafana: https://grafana.devops20.online
 
-## 3. Repository and Registry
+## 3. Repository and Registry:
 
 - GitHub repository: https://github.com/GiangLeK27/final-tier2-project
 - Docker Hub image: docker.io/legiang2090/final-tier2-app
@@ -31,7 +31,7 @@ docker.io/legiang2090/final-tier2-app:sha-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 The production deployment does not rely on the `latest` tag.
 
-## 4. Architecture
+## 4. Architecture:
 
 The production environment is a multi-container Docker Compose system running on a single Ubuntu server.
 
@@ -45,7 +45,7 @@ The production environment is a multi-container Docker Compose system running on
 | `cadvisor` | Container-level metrics |
 | `node-exporter` | Host-level metrics |
 
-## 5. Tier 2 Features
+## 5. Tier 2 Features:
 
 - Single cloud server
 - Docker Compose orchestration
@@ -58,7 +58,7 @@ The production environment is a multi-container Docker Compose system running on
 - Prometheus and Grafana monitoring
 - Grafana alerting for application downtime
 
-## 6. Infrastructure Provisioning
+## 6. Infrastructure Provisioning:
 
 The cloud infrastructure is provisioned manually on AWS EC2.
 
@@ -78,7 +78,7 @@ The script performs the following tasks:
 - Creates `/opt/final-tier2`
 - Verifies Docker, Docker Compose, and firewall status
 
-## 7. CI/CD Pipeline
+## 7. CI/CD Pipeline:
 
 The CI/CD pipeline is implemented using GitHub Actions.
 
@@ -90,7 +90,7 @@ Main workflow file:
 
 A push to the `main` branch automatically triggers the full pipeline.
 
-### Continuous Integration
+### Continuous Integration:
 
 CI stages:
 
@@ -104,7 +104,7 @@ CI stages:
 8. Scan Docker image using Trivy
 9. Push Docker image to Docker Hub
 
-### Continuous Delivery
+### Continuous Delivery:
 
 After CI succeeds, CD deploys to the production EC2 server through SSH:
 
@@ -117,7 +117,7 @@ After CI succeeds, CD deploys to the production EC2 server through SSH:
 7. Print deployment metadata and container status
 8. Run post-deployment health checks
 
-## 8. Post-deployment Health Gate
+## 8. Post-deployment Health Gate:
 
 The CD pipeline validates production after deployment:
 
@@ -130,7 +130,7 @@ If either endpoint fails, the CD job fails.
 
 This confirms both application availability and database connectivity after deployment.
 
-## 9. Security Integration
+## 9. Security Integration:
 
 Trivy is integrated into the CI pipeline.
 
@@ -138,11 +138,11 @@ The pipeline scans the Docker image for `HIGH` and `CRITICAL` vulnerabilities. I
 
 The Dockerfile was hardened by using a production runtime image and removing unnecessary package manager files from the runtime layer.
 
-## 10. Rollback
+## 10. Rollback:
 
 The project supports rollback using two methods.
 
-### Method 1: Server Rollback Script
+### Method 1: Server Rollback Script:
 
 Rollback script:
 
@@ -166,7 +166,7 @@ The script:
 - Validates `/health` and `/db`
 - Restores the previous image if rollback validation fails
 
-### Method 2: GitHub Actions Manual Rollback
+### Method 2: GitHub Actions Manual Rollback:
 
 Manual rollback workflow:
 
@@ -188,7 +188,7 @@ sha-25a922e296fc5e4ddea4b089c6bc30ade1b3ff38
 
 The workflow connects to the production server through SSH, updates `APP_IMAGE`, pulls the selected image, recreates app containers, and validates `/health` and `/db`.
 
-## 11. Monitoring and Observability
+## 11. Monitoring and Observability:
 
 The monitoring stack includes:
 
@@ -209,7 +209,8 @@ Grafana dashboard metrics include:
 - Application 5xx error rate
 - HTTP request duration P95
 
-## 12. Application-level Metrics
+
+## 12. Application-level Metrics:
 
 The application exposes metrics at:
 
@@ -238,7 +239,7 @@ sum(rate(app_http_requests_total{status_code=~"5.."}[5m])) or vector(0)
 histogram_quantile(0.95, sum(rate(app_http_request_duration_seconds_bucket[5m])) by (le))
 ```
 
-## 13. Grafana Alerting
+## 13. Grafana Alerting:
 
 Grafana alert rule for application downtime:
 
@@ -279,7 +280,7 @@ Expected alert behavior after recovery:
 Firing → Normal
 ```
 
-## 14. Failure Simulation
+## 14. Failure Simulation:
 
 Failure simulation command:
 
@@ -309,7 +310,7 @@ Expected result:
 - The production website is accessible through HTTPS.
 - Grafana alert returns to `Normal`.
 
-## 15. Production Operations Commands
+## 15. Production Operations Commands:
 
 Check production status:
 
@@ -343,7 +344,7 @@ curl https://devops20.online/health
 curl https://devops20.online/db
 ```
 
-## 16. Local Development
+## 16. Local Development:
 
 Install dependencies:
 
@@ -384,7 +385,7 @@ http://localhost:3000/health
 http://localhost:3000/metrics
 ```
 
-## 17. Environment Variables
+## 17. Environment Variables:
 
 Production uses a `.env` file on the server.
 
@@ -410,7 +411,7 @@ GRAFANA_PASSWORD=change-me
 DOMAIN=devops20.online
 ```
 
-## 18. GitHub Actions Secrets
+## 18. GitHub Actions Secrets:
 
 The following secrets are configured in the GitHub repository:
 
@@ -422,7 +423,7 @@ PROD_USER
 PROD_SSH_KEY
 ```
 
-## 19. Security Notes
+## 19. Security Notes:
 
 Do not commit:
 
@@ -439,7 +440,7 @@ Grafana password
 
 Secrets must be stored in GitHub Actions repository secrets or in the production server `.env` file.
 
-## 20. Final Demo Flow
+## 20. Final Demo Flow:
 
 The final demonstration should follow this sequence:
 
@@ -458,7 +459,7 @@ The final demonstration should follow this sequence:
 13. Show alert returning to `Normal`.
 14. Demonstrate rollback using GitHub Actions or `scripts/rollback.sh`.
 
-## 21. Final Submission Contents
+## 21. Final Submission Contents:
 
 The final submission ZIP should include:
 
