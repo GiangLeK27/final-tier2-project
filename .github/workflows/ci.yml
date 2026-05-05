@@ -107,9 +107,9 @@ jobs:
             fi
 
             if grep -q "^APP_VERSION=" .env; then
-              sed -i "s|^APP_VERSION=.*|APP_VERSION=${{ github.sha }}|" .env
+              sed -i "s|^APP_VERSION=.*|APP_VERSION=sha-${{ github.sha }}|" .env
             else
-              echo "APP_VERSION=${{ github.sha }}" >> .env
+              echo "APP_VERSION=sha-${{ github.sha }}" >> .env
             fi
 
             echo "========================================"
