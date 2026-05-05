@@ -1,5 +1,6 @@
 services:
   caddy:
+    # HTTPS reverse proxy, TLS termination
     image: caddy:2.8
     restart: unless-stopped
     ports:
@@ -7,8 +8,8 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - caddy_data:/data      # Persistent Caddy data
+      - caddy_config:/config  # Persistent Caddy config
     depends_on:
       - app
       - grafana
@@ -17,6 +18,7 @@ services:
       - monitoring
 
   app:
+    # Node.js web application
     image: ${APP_IMAGE}
     restart: unless-stopped
     environment:
@@ -41,6 +43,7 @@ services:
       start_period: 20s
 
   db:
+    # PostgreSQL database
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -59,6 +62,7 @@ services:
       start_period: 20s
 
   prometheus:
+    # Prometheus metrics collection
     image: prom/prometheus:v2.55.0
     restart: unless-stopped
     command:
@@ -79,6 +83,7 @@ services:
       - node-exporter
 
   grafana:
+    # Grafana dashboard
     image: grafana/grafana:11.3.0
     restart: unless-stopped
     environment:
@@ -95,6 +100,7 @@ services:
       - prometheus
 
   cadvisor:
+    # Container metrics
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     restart: unless-stopped
     privileged: true
@@ -113,6 +119,7 @@ services:
       - monitoring
 
   node-exporter:
+    # Host metrics
     image: prom/node-exporter:v1.8.2
     restart: unless-stopped
     pid: host
