@@ -1,13 +1,18 @@
+# Caddyfile.prod for Final Tier 2 App
+
+# Main app domain
 devops20.online {
-    encode gzip
-    reverse_proxy app:3000
+    encode gzip                  # Enable gzip compression for app traffic
+    reverse_proxy app:3000       # Forward HTTP requests to app container
 }
 
+# Redirect www to main domain
 www.devops20.online {
-    redir https://devops20.online{uri}
+    redir https://devops20.online{uri}   # Redirect all www traffic to main domain
 }
 
+# Grafana dashboard domain
 grafana.devops20.online {
-    encode gzip
-    reverse_proxy grafana:3000
+    encode gzip                  # Enable gzip compression
+    reverse_proxy grafana:3000   # Forward requests to Grafana container
 }
