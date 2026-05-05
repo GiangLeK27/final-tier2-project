@@ -1,6 +1,6 @@
 services:
   caddy:
-
+    # HTTPS reverse proxy, TLS termination
     image: caddy:2.8
     restart: unless-stopped
     ports:
@@ -18,7 +18,7 @@ services:
       - monitoring
 
   app:
-
+    # Node.js web application
     image: ${APP_IMAGE}
     restart: unless-stopped
     environment:
@@ -43,7 +43,7 @@ services:
       start_period: 20s
 
   db:
-
+    # PostgreSQL database
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
