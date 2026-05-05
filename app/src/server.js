@@ -58,7 +58,7 @@ app.get("/", (_req, res) => {
 </head>
 <body>
   <main class="card">
-    <h1>Startup X - Final Project Tier 2 - CI/CD Updated</h1>
+    <h1>Welcome</h1>
     <p class="ok">Running inside Docker container successfully.</p>
     <p>Deployment model: <strong>Single-server containerized deployment using Docker Compose</strong>.</p>
     <p>Application version: <code>${version}</code></p>
