@@ -19,10 +19,10 @@ jobs:
 
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4[cite: 1]
 
       - name: Setup Node.js with dependency cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4[cite: 1]
         with:
           node-version: 20
           cache: npm
@@ -30,19 +30,19 @@ jobs:
 
       - name: Install dependencies
         working-directory: app
-        run: npm ci
+        run: npm ci[cite: 1]
 
       - name: Lint source code
         working-directory: app
-        run: npm run lint
+        run: npm run lint[cite: 1]
 
       - name: Build application artifact
         working-directory: app
-        run: npm run build
+        run: npm run build[cite: 1]
 
       - name: Log in to Docker Hub
         if: github.event_name == 'push'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3[cite: 1]
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -55,13 +55,13 @@ jobs:
             .
 
       - name: Set up Trivy scanner
-        uses: aquasecurity/setup-trivy@v0.2.6
+        uses: aquasecurity/setup-trivy@v0.2.6[cite: 1]
         with:
           cache: true
           version: v0.69.3
 
       - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.35.0[cite: 1]
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           severity: HIGH,CRITICAL
@@ -84,7 +84,7 @@ jobs:
 
     steps:
       - name: Deploy production over SSH
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@v1.2.5[cite: 1]
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
@@ -94,94 +94,70 @@ jobs:
             set -e
 
             echo "Starting production deployment..."
-            cd /opt/final-tier2
+            cd /opt/final-tier2[cite: 1]
 
             echo "Logging in to Docker Hub..."
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin[cite: 1]
 
             echo "Updating APP_IMAGE in .env..."
             if grep -q "^APP_IMAGE=" .env; then
               sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" .env
             else
               echo "APP_IMAGE=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" >> .env
-            fi
+            fi[cite: 1]
 
             if grep -q "^APP_VERSION=" .env; then
               sed -i "s|^APP_VERSION=.*|APP_VERSION=${{ github.sha }}|" .env
             else
               echo "APP_VERSION=${{ github.sha }}" >> .env
-            fi
-
-            echo "========================================"
-            echo "Deployment metadata"
-            echo "========================================"
-            echo "GitHub commit SHA: ${{ github.sha }}"
-            echo "Docker image to deploy: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-            echo "Production directory: $(pwd)"
-            echo "Current APP_IMAGE before deployment:"
-            grep "^APP_IMAGE=" .env || true
-
-            echo "========================================"
-            echo "Docker Compose status BEFORE deployment"
-            echo "========================================"
-            docker compose -f docker-compose.prod.yml ps || true
+            fi[cite: 1]
 
             echo "========================================"
             echo "Pulling new application image"
             echo "========================================"
-            docker compose -f docker-compose.prod.yml pull app
+            docker compose -f docker-compose.prod.yml pull app[cite: 1]
 
             echo "========================================"
             echo "Deploying production containers"
             echo "========================================"
-            docker compose -f docker-compose.prod.yml up -d --scale app=2 --remove-orphans
+            docker compose -f docker-compose.prod.yml up -d --scale app=2 --remove-orphans[cite: 1]
 
             echo "========================================"
             echo "Cleaning unused Docker images"
             echo "========================================"
-            docker image prune -f
+            docker image prune -f[cite: 1]
 
-            echo "========================================"
-            echo "Current APP_IMAGE after deployment"
-            echo "========================================"
-            grep "^APP_IMAGE=" .env
-
-            echo "========================================"
-            echo "Docker Compose status AFTER deployment"
-            echo "========================================"
-            docker compose -f docker-compose.prod.yml ps
-
-            echo "========================================"
-            echo "Recent application logs"
-            echo "========================================"
-            docker compose -f docker-compose.prod.yml logs app --tail=40
-
-            echo "Waiting for production services to stabilize..."
-            sleep 15
+            echo "Waiting for production services to stabilize (30s)..."
+            sleep 30[cite: 1]
 
             echo "Running post-deployment health gate..."
 
             echo "Checking /health endpoint..."
             HEALTH_RESPONSE=$(curl -fsS https://devops20.online/health)
             echo "$HEALTH_RESPONSE"
-
             echo "$HEALTH_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"|"ok"[[:space:]]*:[[:space:]]*true' || {
-              echo "Health check failed: /health did not return a valid OK response."
+              echo "Health check failed."
               exit 1
-            }
+            }[cite: 1]
 
-            echo "Checking /db endpoint..."
-            DB_RESPONSE=$(curl -fsS https://devops20.online/db)
-            echo "$DB_RESPONSE"
+            echo "Checking /db endpoint with retries..."
+            SUCCESS=false
+            for i in {1..5}; do
+              echo "Attempt $i: Checking database connection..."
+              DB_RESPONSE=$(curl -fsS https://devops20.online/db) && {
+                echo "Database response: $DB_RESPONSE"
+                if echo "$DB_RESPONSE" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+                  echo "Database check passed."
+                  SUCCESS=true
+                  break
+                fi
+              } || echo "Database not ready yet..."
+              sleep 10
+            done[cite: 1]
 
-            echo "$DB_RESPONSE" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || {
-              echo "Database check failed: /db did not return ok=true."
+            if [ "$SUCCESS" = false ]; then
+              echo "Database check failed after multiple attempts."
               exit 1
-            }
-
-            echo "Post-deployment health gate passed."
-
-            echo "Current production status after health gate:"
-            docker compose -f docker-compose.prod.yml ps
+            fi
 
             echo "Deployment completed successfully."
