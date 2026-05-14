@@ -26,6 +26,8 @@ services:
       PORT: 3000
       APP_VERSION: ${APP_VERSION}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      - uploads_data:/app/src/public/uploads
     expose:
       - "3000"
     depends_on:
@@ -138,6 +140,7 @@ volumes:
   caddy_config:
   prometheus_data:
   grafana_data:
+  uploads_data:
 
 networks:
   frontend:
