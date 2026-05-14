@@ -1,4 +1,4 @@
-/* global document, window, bootstrap, fetch, FormData, FileReader */
+/* global document, window, bootstrap, fetch, FormData, FileReader, alert */
 
 document.addEventListener("DOMContentLoaded", () => {
   const addButton = document.getElementById("btn-add");
