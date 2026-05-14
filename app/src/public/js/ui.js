@@ -20,7 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const modal = new bootstrap.Modal(modalElement);
-  const placeholderImage = "/images/placeholder-80.svg";
+  const placeholderImage = "/images/placeholder-80.png";
 
   function resetForm() {
     productForm.reset();
