@@ -24,9 +24,10 @@
           <tr data-id="<%= p.id %>" data-image="<%= p.imageUrl || "" %>">
             <td>
               <img
-                src="<%= p.imageUrl && p.imageUrl.length ? p.imageUrl : '/images/placeholder-80.svg' %>"
+                src="<%= p.imageUrl && p.imageUrl.length ? p.imageUrl : '/images/placeholder-80.png' %>"
                 alt="thumb"
                 class="img-thumbnail product-thumb"
+                onerror="this.onerror=null;this.src='/images/placeholder-80.png';"
               >
             </td>
 
@@ -133,9 +134,10 @@
               <div class="mt-2">
                 <img
                   id="img-preview"
-                  src="/images/placeholder-80.svg"
+                  src="/images/placeholder-80.png"
                   alt="preview"
                   class="img-thumbnail image-preview"
+                  onerror="this.onerror=null;this.src='/images/placeholder-80.png';"
                 >
               </div>
             </div>
