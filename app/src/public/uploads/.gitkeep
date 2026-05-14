@@ -1,0 +1,17 @@
+app/
+  src/
+    server.js
+    views/
+      index.ejs
+      partials/
+        head.ejs
+        footer.ejs
+    public/
+      css/
+        styles.css
+      js/
+        ui.js
+      images/
+        placeholder-80.svg
+      uploads/
+        .gitkeep
