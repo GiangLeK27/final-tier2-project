@@ -1,4 +1,4 @@
-name: CI/CD - Production Pipeline
+name: CI/CD - Lint Build Scan Push Deploy
 
 on:
   push:
@@ -13,157 +13,175 @@ env:
   IMAGE_TAG: sha-${{ github.sha }}
 
 jobs:
-  # ==========================================
-  # KHÂU CI (CONTINUOUS INTEGRATION)
-  # ==========================================
-  lint:
-    name: CI - Code Quality (Lint)
+  ci:
+    name: CI - Lint, Build, Scan, and Push Docker Image
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js with dependency cache
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Install dependencies & Lint
+      - name: Install dependencies
         working-directory: app
-        run: |
-          npm ci
-          npm run lint
+        run: npm ci
 
-  build:
-    name: CI - Build Docker Image
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
+      - name: Lint source code
+        working-directory: app
+        run: npm run lint
 
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
-
-      - name: Save Docker image to tar archive
-        run: docker save -o image.tar ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-
-      - name: Upload image artifact for next jobs
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image
-          path: image.tar
-          retention-days: 1
-
-  scan:
-    name: CI - Trivy Security Scan
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Download image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-
-      - name: Load Docker image from tar
-        run: docker load -i image.tar
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-  push:
-    name: CI - Push to Docker Hub
-    runs-on: ubuntu-latest
-    needs: scan
-    if: github.event_name == 'push'
-    steps:
-      - name: Download image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-
-      - name: Load Docker image from tar
-        run: docker load -i image.tar
+      - name: Build application artifact
+        working-directory: app
+        run: npm run build
 
       - name: Log in to Docker Hub
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Docker image
+      - name: Build Docker image with version tags
         run: |
-          docker push ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.IMAGE_NAME }}:main-${{ github.run_number }}
-          docker push ${{ env.IMAGE_NAME }}:main-${{ github.run_number }}
+          docker build \
+            -t $IMAGE_NAME:$IMAGE_TAG \
+            -t $IMAGE_NAME:main-${{ github.run_number }} \
+            .
 
-  # ==========================================
-  # KHÂU CD (CONTINUOUS DELIVERY)
-  # ==========================================
-  deploy:
-    name: CD - Deploy to EC2
+      - name: Set up Trivy scanner
+        uses: aquasecurity/setup-trivy@v0.2.6
+        with:
+          cache: true
+          version: v0.69.3
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          ignore-unfixed: true
+          format: table
+          skip-setup-trivy: true
+
+      - name: Push Docker image to registry
+        if: github.event_name == 'push'
+        run: |
+          docker push $IMAGE_NAME:$IMAGE_TAG
+          docker push $IMAGE_NAME:main-${{ github.run_number }}
+
+  cd:
+    name: CD - Deploy to Production EC2
     runs-on: ubuntu-latest
-    needs: push
-    if: github.event_name == 'push'
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
     steps:
-      - name: Execute Zero-Downtime Deployment via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy production over SSH
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
           script: |
-            echo "Starting Production Deployment"
-            export APP_IMAGE="${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-            export APP_VERSION="${{ github.sha }}"
+            set -e
 
+            echo "Starting production deployment..."
             cd /opt/final-tier2
 
-            # Save old tag for rollback
-            PREVIOUS_TAG=$(grep "^APP_IMAGE=" .env | cut -d'=' -f2 || echo "")
-            sed -i "s|^PREVIOUS_IMAGE_TAG=.*|PREVIOUS_IMAGE_TAG=${PREVIOUS_TAG}|" .env
+            echo "Logging in to Docker Hub..."
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-            # Update .env with new image
-            sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${APP_IMAGE}|" .env
-            sed -i "s|^APP_VERSION=.*|APP_VERSION=${APP_VERSION}|" .env
+            echo "Updating APP_IMAGE in .env..."
+            if grep -q "^APP_IMAGE=" .env; then
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" .env
+            else
+              echo "APP_IMAGE=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" >> .env
+            fi
 
-            # Pull and deploy with Zero Downtime
+            if grep -q "^APP_VERSION=" .env; then
+              sed -i "s|^APP_VERSION=.*|APP_VERSION=sha-${{ github.sha }}|" .env
+            else
+              echo "APP_VERSION=sha-${{ github.sha }}" >> .env
+            fi
+
+            echo "========================================"
+            echo "Deployment metadata"
+            echo "========================================"
+            echo "GitHub commit SHA: ${{ github.sha }}"
+            echo "Docker image to deploy: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+            echo "Production directory: $(pwd)"
+            echo "Current APP_IMAGE before deployment:"
+            grep "^APP_IMAGE=" .env || true
+
+            echo "========================================"
+            echo "Docker Compose status BEFORE deployment"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml ps || true
+
+            echo "========================================"
+            echo "Pulling new application image"
+            echo "========================================"
             docker compose -f docker-compose.prod.yml pull app
-            docker compose -f docker-compose.prod.yml up -d --no-deps --scale app=2 --no-recreate app
-            docker compose -f docker-compose.prod.yml up -d --no-deps --scale app=2 --force-recreate app
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-  health-check:
-    name: CD - Health Gate Verification
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: github.event_name == 'push'
-    steps:
-      - name: Wait for production services to stabilize
-        run: sleep 15
+            echo "========================================"
+            echo "Deploying production containers"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml up -d --scale app=2 --remove-orphans
 
-      - name: Verify /health endpoint
-        run: |
-          HEALTH_RESPONSE=$(curl -fsS https://devops20.online/health)
-          echo "$HEALTH_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"|"ok"[[:space:]]*:[[:space:]]*true' || {
-            echo "Health check failed."
-            exit 1
-          }
+            echo "========================================"
+            echo "Cleaning unused Docker images"
+            echo "========================================"
+            docker image prune -f
 
-      - name: Verify /db endpoint
-        run: |
-          DB_RESPONSE=$(curl -fsS https://devops20.online/db)
-          echo "$DB_RESPONSE" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || {
-            echo "Database check failed."
-            exit 1
-          }
+            echo "========================================"
+            echo "Current APP_IMAGE after deployment"
+            echo "========================================"
+            grep "^APP_IMAGE=" .env
+
+            echo "========================================"
+            echo "Docker Compose status AFTER deployment"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml ps
+
+            echo "========================================"
+            echo "Recent application logs"
+            echo "========================================"
+            docker compose -f docker-compose.prod.yml logs app --tail=40
+
+            echo "Waiting for production services to stabilize..."
+            sleep 15
+
+            echo "Running post-deployment health gate..."
+
+            echo "Checking /health endpoint..."
+            HEALTH_RESPONSE=$(curl -fsS https://devops20.online/health)
+            echo "$HEALTH_RESPONSE"
+
+            echo "$HEALTH_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"|"ok"[[:space:]]*:[[:space:]]*true' || {
+              echo "Health check failed: /health did not return a valid OK response."
+              exit 1
+            }
+
+            echo "Checking /db endpoint..."
+            DB_RESPONSE=$(curl -fsS https://devops20.online/db)
+            echo "$DB_RESPONSE"
+
+            echo "$DB_RESPONSE" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || {
+              echo "Database check failed: /db did not return ok=true."
+              exit 1
+            }
+
+            echo "Post-deployment health gate passed."
+
+            echo "Current production status after health gate:"
+            docker compose -f docker-compose.prod.yml ps
+
+            echo "Deployment completed successfully."
