@@ -1,3 +1,5 @@
+/* global document, window, bootstrap, fetch, FormData, FileReader */
+
 document.addEventListener("DOMContentLoaded", () => {
   const addButton = document.getElementById("btn-add");
   const tableBody = document.getElementById("product-table");
