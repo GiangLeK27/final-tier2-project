@@ -15,9 +15,16 @@
 
   <body>
     <div class="container my-4">
-      <header class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3">Products</h1>
+      <header class="d-flex justify-content-between align-items-start mb-3">
+        <h1 class="h3 mb-0">Products</h1>
+
         <div class="text-end small text-muted">
-          Host: <%= hostname %> · Source: <%= source %>
+          <div>
+            Host: <%= hostname %> · Source: <%= source %>
+          </div>
+
+          <div>
+            Version: <%= version %>
+          </div>
         </div>
       </header>

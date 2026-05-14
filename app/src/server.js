@@ -119,9 +119,48 @@ async function ensureProductsTable() {
     await dbPool.query(`
       INSERT INTO products (name, price, color, description, image_url)
       VALUES
-        ('Laptop Pro', 1299.99, 'Silver', 'High-performance laptop', ''),
-        ('Wireless Mouse', 29.99, 'Black', 'Compact wireless mouse', ''),
-        ('Mechanical Keyboard', 89.99, 'White', 'RGB mechanical keyboard', '')
+        (
+          'iPhone SE (3rd generation)',
+          429.00,
+          'black',
+          'Compact design with A15 Bionic, great value for everyday use.',
+          ''
+        ),
+        (
+          'MacBook Pro 14-inch (M2 Pro)',
+          1999.00,
+          'silver',
+          'Powerful M2 Pro chip, Liquid Retina XDR display, and strong battery life.',
+          ''
+        ),
+        (
+          'Apple Watch Series 9',
+          399.00,
+          'starlight',
+          'Smart health tracking with a bright display and fast chip.',
+          ''
+        ),
+        (
+          'MacBook Air 13-inch (M2)',
+          1199.00,
+          'midnight',
+          'Thin, light, quiet, and suitable for study or daily work.',
+          ''
+        ),
+        (
+          'iPad Pro 11-inch (M4)',
+          799.00,
+          'silver',
+          'Premium tablet for creative work and productivity.',
+          ''
+        ),
+        (
+          'iPhone 14 Pro Max',
+          1099.00,
+          'space-black',
+          '6.7-inch Super Retina XDR display, A16 Bionic chip, pro camera system.',
+          ''
+        )
     `);
   }
 }
@@ -140,7 +179,7 @@ async function getProducts() {
       description,
       image_url AS "imageUrl"
     FROM products
-    ORDER BY id DESC
+    ORDER BY id ASC
   `);
 
   return result.rows;
@@ -186,7 +225,8 @@ app.get("/", async (_req, res) => {
     res.render("index", {
       products,
       hostname: os.hostname(),
-      source: "PostgreSQL"
+      source: "PostgreSQL",
+      version
     });
   } catch (error) {
     console.error("Failed to render product page:", error);
@@ -241,7 +281,13 @@ app.post("/products", upload.single("imageFile"), async (req, res) => {
       `
         INSERT INTO products (name, price, color, description, image_url)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, name, price, color, description, image_url AS "imageUrl"
+        RETURNING
+          id,
+          name,
+          price,
+          color,
+          description,
+          image_url AS "imageUrl"
       `,
       [data.name, data.price, data.color, data.description, imageUrl]
     );
@@ -251,6 +297,8 @@ app.post("/products", upload.single("imageFile"), async (req, res) => {
       product: result.rows[0]
     });
   } catch (error) {
+    console.error("Create product failed:", error);
+
     res.status(500).json({
       ok: false,
       message: error.message
@@ -319,7 +367,13 @@ app.patch("/products/:id", upload.single("imageFile"), async (req, res) => {
           image_url = $5,
           updated_at = NOW()
         WHERE id = $6
-        RETURNING id, name, price, color, description, image_url AS "imageUrl"
+        RETURNING
+          id,
+          name,
+          price,
+          color,
+          description,
+          image_url AS "imageUrl"
       `,
       [
         data.name,
@@ -336,6 +390,8 @@ app.patch("/products/:id", upload.single("imageFile"), async (req, res) => {
       product: result.rows[0]
     });
   } catch (error) {
+    console.error("Update product failed:", error);
+
     res.status(500).json({
       ok: false,
       message: error.message
@@ -380,6 +436,8 @@ app.delete("/products/:id", async (req, res) => {
       ok: true
     });
   } catch (error) {
+    console.error("Delete product failed:", error);
+
     res.status(500).json({
       ok: false,
       message: error.message
