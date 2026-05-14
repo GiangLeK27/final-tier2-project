@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { fileURLToPath } from "url";
+import { randomUUID } from "node:crypto";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -279,8 +280,8 @@ app.post("/products", upload.single("imageFile"), async (req, res) => {
 
     const result = await dbPool.query(
       `
-        INSERT INTO products (name, price, color, description, image_url)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO products (id, name, price, color, description, image_url)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING
           id,
           name,
@@ -289,7 +290,14 @@ app.post("/products", upload.single("imageFile"), async (req, res) => {
           description,
           image_url AS "imageUrl"
       `,
-      [data.name, data.price, data.color, data.description, imageUrl]
+      [
+        randomUUID(),
+        data.name,
+        data.price,
+        data.color,
+        data.description,
+        imageUrl
+      ]
     );
 
     res.status(201).json({
@@ -318,9 +326,9 @@ app.patch("/products/:id", upload.single("imageFile"), async (req, res) => {
 
     await ensureProductsTable();
 
-    const productId = Number(req.params.id);
+    const productId = String(req.params.id || "").trim();
 
-    if (!Number.isInteger(productId)) {
+    if (!productId) {
       res.status(400).json({
         ok: false,
         message: "Invalid product id"
@@ -409,9 +417,9 @@ app.delete("/products/:id", async (req, res) => {
       return;
     }
 
-    const productId = Number(req.params.id);
+    const productId = String(req.params.id || "").trim();
 
-    if (!Number.isInteger(productId)) {
+    if (!productId) {
       res.status(400).json({
         ok: false,
         message: "Invalid product id"
